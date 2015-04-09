@@ -2,7 +2,7 @@
     BrewDoo: Displays count-up timers on a Hitachi HD44780 LCD for use as a
     way of keeping track of when pots of coffee were last brewed.  Whenever
     the 'brew' button is pressed, the timer associated with that button is
-    reset.
+    reset.  So, really, it can be used to time anything.
     
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -30,12 +30,15 @@ const char* VersionString = "BrewDoo 1.0";
 /// Keeps track of number of minutes since each pot was brewed.
 int gTimeSinceBrew[POT_COUNT] = { 0 };
 
+/// Time, in minutes, beyond which a pot is considered old.
+#define BREW_TIME_LIMIT 4*60 
+
 /// Digital inputs (w/pullups) 
 int gBrewResetPin[POT_COUNT] = { 14, 15 };  /// TODO: Figure out real pins for reset buttons
 
 /// Defines the layout of the LCD's character cells.
 #define LCD_ROWS 2
-#define LCD_COLS 16
+#define LCD_COLS 16 
 
 /// A buffer used for conveniently writing spaces to an entire line.
 char gPad[LCD_COLS+1];
@@ -106,6 +109,94 @@ void scroll_line( const char* line, int row )
 
 
 
+/// Guaranteed to consume no more than 4 positions in gDisplayText.
+int minutes_to_time_str( int minutes, int row, int start_index, int limit )
+{
+   if ( start_index >= limit )
+      return start_index;
+
+   if ( minutes < 0 )
+   {
+      gDisplayText[row][start_index++] = '?';
+      return start_index;
+   }
+
+   if ( minutes > BREW_TIME_LIMIT )
+   {
+      gDisplayText[row][start_index++] = 'O';
+      if ( start_index < limit ) gDisplayText[row][start_index++] = 'L';
+      if ( start_index < limit ) gDisplayText[row][start_index++] = 'D';
+      return start_index;
+   }
+   
+#if (BREW_TIME_LIMIT >= 10*60)
+#error This code assumes a brew time limit of less than 10 hours.
+#endif
+   int hour( minutes / 60 );
+   int minute( minutes % 60 );
+
+   gDisplayText[row][start_index++] = '0'+hour;
+   if ( start_index < limit ) gDisplayText[row][start_index++] = ':';
+   if ( start_index < limit ) gDisplayText[row][start_index++] = '0'+minute/10;
+   if ( start_index < limit ) gDisplayText[row][start_index++] = '0'+minute%10;
+
+   return start_index;
+}
+
+
+
+#if (POT_COUNT == 2)
+void update_display()
+{
+   int i;
+#if (LCD_ROWS == 1)
+#if (LCD_COLS<14)
+#error Display too small for information to be displayed.
+#endif
+   // Need to squeeze everything on one line
+   i = 0;
+   gDisplayText[0][i++] = 'A';
+   gDisplayText[0][i++] = ' ';
+   i = minutes_to_time_str( gTimeSinceBrew[0], 0, i, LCD_COLS );
+   gDisplayText[0][i++] = ' ';
+   gDisplayText[0][i++] = ' ';
+   gDisplayText[0][i++] = 'B';
+   gDisplayText[0][i++] = ' ';
+   i = minutes_to_time_str( gTimeSinceBrew[1], 1, i, LCD_COLS );
+   for ( ; i <= LCD_COLS; ++i )
+      gDisplayText[0][i] = 0;
+#else
+#if (LCD_COLS<10)
+#error Display too small for information to be displayed.
+#endif
+   // One line per pot
+   i = 0;
+   gDisplayText[0][i++] = 'P';
+   gDisplayText[0][i++] = 'o';
+   gDisplayText[0][i++] = 't';
+   gDisplayText[0][i++] = ' ';
+   gDisplayText[0][i++] = 'A';
+   gDisplayText[0][i++] = ' ';
+   i = minutes_to_time_str( gTimeSinceBrew[0], 0, i, LCD_COLS );
+   for ( ; i <= LCD_COLS; ++i )
+      gDisplayText[0][i] = 0;
+   i = 0;
+   gDisplayText[1][i++] = 'P';
+   gDisplayText[1][i++] = 'o';
+   gDisplayText[1][i++] = 't';
+   gDisplayText[1][i++] = ' ';
+   gDisplayText[1][i++] = 'B';
+   gDisplayText[1][i++] = ' ';
+   i = minutes_to_time_str( gTimeSinceBrew[1], 1, i, LCD_COLS );
+   for ( ; i <= LCD_COLS; ++i )
+      gDisplayText[1][i] = 0;
+#endif
+   display_lines(false);
+}
+#else
+#error Need to implement update_display() for POT_COUNT value
+#endif
+
 /// One-time setup before entering the main loop.
 void setup() 
 {
@@ -153,15 +244,8 @@ void loop()
       {
          ++gTimeSinceBrew[i];
       }
-      // Update the display
-      //for ( i = 0; i < gIncomingIndex && i < LCD_COLS; ++i )
-      //{
-         //gDisplayText[gCurrentRow][i] = gIncomingBuffer[i];
-      //}
-      //for ( ; i < LCD_COLS; ++i )
-         //gDisplayText[gCurrentRow][i] = 0;
 
-      //display_lines(true);
+      update_display();
    }
 
    // Check for resets
