@@ -32,10 +32,12 @@ const char* VersionString = "BrewDoo 1.0";
 #define POT_COUNT 2
 
 /// Keeps track of number of seconds since each pot was brewed.
-int gTimeSinceBrew[POT_COUNT] = { 0 };
+long gTimeSinceBrew[POT_COUNT] = { -1 };
 
 /// Time, in seconds, beyond which a pot is considered old.
-#define BREW_TIME_LIMIT 1*60*60
+#define BREW_TIME_LIMIT (1*60*60)
+/// Time, in seconds, when the brew time should be reset to 'unknown' 
+#define RESET_TIME_LIMIT (BREW_TIME_LIMIT*4)
 
 /// Digital inputs (w/pullups) 
 int gBrewResetPin[POT_COUNT] = { 0, 1 };
@@ -161,16 +163,8 @@ int seconds_to_time_str( int seconds, int row, int start_index, int limit, bool 
       return start_index;
    }
 
-   if ( seconds > BREW_TIME_LIMIT )
-   {
-      gDisplayText[row][start_index++] = 'O';
-      if ( start_index < limit ) gDisplayText[row][start_index++] = 'L';
-      if ( start_index < limit ) gDisplayText[row][start_index++] = 'D';
-      return start_index;
-   }
-   
-#if (BREW_TIME_LIMIT >= 10*60*60)
-#error This code assumes a brew time limit of less than 10 hours.
+#if (RESET_TIME_LIMIT >= 10*60*60)
+#error This code assumes times less than 10 hours.
 #endif
    int hour( seconds / 60 / 60 );
    int minute( ( seconds - hour * 60 * 60 ) / 60 );
@@ -219,6 +213,7 @@ void update_display()
    // One pot per row, with seconds
    for ( int p = 0; p < POT_COUNT && p < LCD_ROWS; ++p )
    {
+      int v = gTimeSinceBrew[p];
       i = 0;
       gDisplayText[p][i++] = 'P';
       gDisplayText[p][i++] = 'o';
@@ -234,18 +229,20 @@ void update_display()
 
    display_lines(false);
 
-   for ( i = 0; i < POT_COUNT; ++i )
+   for ( int p = 0; p < POT_COUNT; ++p )
    {
-      if ( gTimeSinceBrew[i] < 0 )
-         set_color( i, 0, 0, 0 );
-      else if ( gTimeSinceBrew[i] > BREW_TIME_LIMIT )
-         set_color( i, 255, 0, 0 );
+      if ( gTimeSinceBrew[p] < 0 )
+         set_color( p, 0, 0, 0 );
+      else if ( gTimeSinceBrew[p] > BREW_TIME_LIMIT )
+         set_color( p, 255, 0, 0 );
       else
       {
-         unsigned long val = 255 * (BREW_TIME_LIMIT - gTimeSinceBrew[i]) / BREW_TIME_LIMIT;
+         unsigned long val = (255 * (BREW_TIME_LIMIT - gTimeSinceBrew[p]));
+         
+         val /= BREW_TIME_LIMIT;
          if ( val > 255 )
             val = 255;
-         set_color( i, 255-val, val, 0 );
+         set_color( p, 255-val, val/2, 0 );
       }
    }
 }
@@ -275,16 +272,21 @@ void setup()
 
    // Display an initial greeting message 
    int rgb = 64;
+   int line = 0;
    for ( int j = 0 ; j < POT_COUNT; ++j )
       set_color( j, rgb, rgb, 2*rgb );
    rgb = rgb / 2;
-   scroll_line( VersionString, 0, 400 );
+   scroll_line( VersionString, line, 400 );
+   if ( LCD_ROWS > 1 )
+      line++;
    for ( int i = 0; i < GREETING_LINES; ++i )
    {
       for ( int j = 0 ; j < POT_COUNT; ++j )
          set_color( j, rgb, rgb, 2*rgb );
       rgb = rgb / 2;
-      scroll_line( GreetingString[i], 0, 400 );
+      scroll_line( GreetingString[i], line, 400 );
+      if ( line < LCD_ROWS - 1 )
+         line++;
    }
    delay(500);
    for ( int i = 0 ; i < POT_COUNT; ++i )
@@ -316,7 +318,10 @@ void loop()
       for ( int i = 0; i < POT_COUNT; ++i )
       {
          if ( gTimeSinceBrew[i] >= 0 )
-            ++gTimeSinceBrew[i];
+         {
+            if ( ++gTimeSinceBrew[i] > RESET_TIME_LIMIT )
+               gTimeSinceBrew[i] = -1;
+         }
       }
       do_update = true;
    }
