@@ -32,7 +32,7 @@ const char* VersionString = "BrewDoo 1.0";
 int gTimeSinceBrew[POT_COUNT] = { 0 };
 
 /// Time, in seconds, beyond which a pot is considered old.
-#define BREW_TIME_LIMIT 60 //4*60*60
+#define BREW_TIME_LIMIT 4*60*60
 
 /// Digital inputs (w/pullups) 
 int gBrewResetPin[POT_COUNT] = { 0, 1 };
