@@ -25,20 +25,38 @@
 const char* VersionString = "BrewDoo 1.0";
 
 /// Defines number of timers (pots of coffee) to keep track of.
+/// For an UNO, 2 is the maximum number possible.
 #define POT_COUNT 2
 
-/// Keeps track of number of minutes since each pot was brewed.
+/// Keeps track of number of seconds since each pot was brewed.
 int gTimeSinceBrew[POT_COUNT] = { 0 };
 
-/// Time, in minutes, beyond which a pot is considered old.
-#define BREW_TIME_LIMIT 4*60 
+/// Time, in seconds, beyond which a pot is considered old.
+#define BREW_TIME_LIMIT 60 //4*60*60
 
 /// Digital inputs (w/pullups) 
-int gBrewResetPin[POT_COUNT] = { 14, 15 };  /// TODO: Figure out real pins for reset buttons
+int gBrewResetPin[POT_COUNT] = { 0, 1 };
+
+/// Pins for RGB LEDs
+struct RGB 
+{
+   byte red;
+   byte green;
+   byte blue;
+};
+RGB gLEDPin[POT_COUNT] = {
+   { 9, 10, 11 },
+   { 3, 5, 6 }
+};
 
 /// Defines the layout of the LCD's character cells.
 #define LCD_ROWS 2
 #define LCD_COLS 16 
+
+const char* GreetingString[LCD_ROWS] = {
+"Life's too short",
+"for old coffee!"
+};
 
 /// A buffer used for conveniently writing spaces to an entire line.
 char gPad[LCD_COLS+1];
@@ -50,11 +68,11 @@ char gDisplayText[LCD_ROWS][LCD_COLS+1] = {0};
 // interchangeably for any of these LCD connections.  I chose these to
 // simplify the PCB layout.
 int gLCD_RS_Pin = 12;
-int gLCD_E_Pin = 11;
+int gLCD_E_Pin = 13;
 int gLCD_D4_Pin = 8;
 int gLCD_D5_Pin = 7;
-int gLCD_D6_Pin = 6;
-int gLCD_D7_Pin = 5;
+int gLCD_D6_Pin = 4;
+int gLCD_D7_Pin = 2;
 
 
 /// Initialize the LCD display with correct pin assignments.
@@ -103,25 +121,40 @@ void scroll_line( const char* line, int row )
       gLCDDisplay.print(gPad);
       gLCDDisplay.setCursor( LCD_COLS-i-1, row );
       gLCDDisplay.print(line);
-      delay(300);
+      delay(100);
    }
 }
 
 
 
-/// Guaranteed to consume no more than 4 positions in gDisplayText.
-int minutes_to_time_str( int minutes, int row, int start_index, int limit )
+// led is index into gLEDPin array; color components in the range [0..255]
+void set_color(int led, int red, int green, int blue)
+{
+#ifdef COMMON_ANODE
+   red = 255 - red;
+   green = 255 - green;
+   blue = 255 - blue;
+#endif
+   analogWrite(gLEDPin[led].red, red);
+   analogWrite(gLEDPin[led].green, green);
+   analogWrite(gLEDPin[led].blue, blue);
+}
+
+
+
+/// Guaranteed to consume no more than 7 positions in gDisplayText.
+int seconds_to_time_str( int seconds, int row, int start_index, int limit )
 {
    if ( start_index >= limit )
       return start_index;
 
-   if ( minutes < 0 )
+   if ( seconds < 0 )
    {
       gDisplayText[row][start_index++] = '?';
       return start_index;
    }
 
-   if ( minutes > BREW_TIME_LIMIT )
+   if ( seconds > BREW_TIME_LIMIT )
    {
       gDisplayText[row][start_index++] = 'O';
       if ( start_index < limit ) gDisplayText[row][start_index++] = 'L';
@@ -129,16 +162,20 @@ int minutes_to_time_str( int minutes, int row, int start_index, int limit )
       return start_index;
    }
    
-#if (BREW_TIME_LIMIT >= 10*60)
+#if (BREW_TIME_LIMIT >= 10*60*60)
 #error This code assumes a brew time limit of less than 10 hours.
 #endif
-   int hour( minutes / 60 );
-   int minute( minutes % 60 );
+   int hour( seconds / 60 / 60 );
+   int minute( ( seconds - hour * 60 * 60 ) / 60 );
+   int second( seconds % 60 );
 
    gDisplayText[row][start_index++] = '0'+hour;
    if ( start_index < limit ) gDisplayText[row][start_index++] = ':';
    if ( start_index < limit ) gDisplayText[row][start_index++] = '0'+minute/10;
    if ( start_index < limit ) gDisplayText[row][start_index++] = '0'+minute%10;
+   if ( start_index < limit ) gDisplayText[row][start_index++] = ':';
+   if ( start_index < limit ) gDisplayText[row][start_index++] = '0'+second/10;
+   if ( start_index < limit ) gDisplayText[row][start_index++] = '0'+second%10;
 
    return start_index;
 }
@@ -150,23 +187,22 @@ void update_display()
 {
    int i;
 #if (LCD_ROWS == 1)
-#if (LCD_COLS<14)
+#if (LCD_COLS<16)
 #error Display too small for information to be displayed.
 #endif
    // Need to squeeze everything on one line
    i = 0;
    gDisplayText[0][i++] = 'A';
    gDisplayText[0][i++] = ' ';
-   i = minutes_to_time_str( gTimeSinceBrew[0], 0, i, LCD_COLS );
-   gDisplayText[0][i++] = ' ';
+   i = seconds_to_time_str( gTimeSinceBrew[0], 0, i, LCD_COLS );
    gDisplayText[0][i++] = ' ';
    gDisplayText[0][i++] = 'B';
    gDisplayText[0][i++] = ' ';
-   i = minutes_to_time_str( gTimeSinceBrew[1], 1, i, LCD_COLS );
+   i = seconds_to_time_str( gTimeSinceBrew[1], 1, i, LCD_COLS );
    for ( ; i <= LCD_COLS; ++i )
       gDisplayText[0][i] = 0;
 #else
-#if (LCD_COLS<10)
+#if (LCD_COLS<13)
 #error Display too small for information to be displayed.
 #endif
    // One line per pot
@@ -177,7 +213,7 @@ void update_display()
    gDisplayText[0][i++] = ' ';
    gDisplayText[0][i++] = 'A';
    gDisplayText[0][i++] = ' ';
-   i = minutes_to_time_str( gTimeSinceBrew[0], 0, i, LCD_COLS );
+   i = seconds_to_time_str( gTimeSinceBrew[0], 0, i, LCD_COLS );
    for ( ; i <= LCD_COLS; ++i )
       gDisplayText[0][i] = 0;
    i = 0;
@@ -187,11 +223,26 @@ void update_display()
    gDisplayText[1][i++] = ' ';
    gDisplayText[1][i++] = 'B';
    gDisplayText[1][i++] = ' ';
-   i = minutes_to_time_str( gTimeSinceBrew[1], 1, i, LCD_COLS );
+   i = seconds_to_time_str( gTimeSinceBrew[1], 1, i, LCD_COLS );
    for ( ; i <= LCD_COLS; ++i )
       gDisplayText[1][i] = 0;
 #endif
    display_lines(false);
+
+   for ( i = 0; i < POT_COUNT; ++i )
+   {
+      if ( gTimeSinceBrew[i] < 0 )
+         set_color( i, 0, 0, 0 );
+      else if ( gTimeSinceBrew[i] > BREW_TIME_LIMIT )
+         set_color( i, 255, 0, 0 );
+      else
+      {
+         unsigned long val = 255 * (BREW_TIME_LIMIT - gTimeSinceBrew[i]) / BREW_TIME_LIMIT;
+         if ( val > 255 )
+            val = 255;
+         set_color( i, 255-val, val, 0 );
+      }
+   }
 }
 #else
 #error Need to implement update_display() for POT_COUNT value
@@ -212,13 +263,24 @@ void setup()
    {
       gTimeSinceBrew[i] = -1;
       pinMode( gBrewResetPin[i], INPUT_PULLUP );
+      pinMode( gLEDPin[i].red, OUTPUT );
+      pinMode( gLEDPin[i].green, OUTPUT );
+      pinMode( gLEDPin[i].blue, OUTPUT );
+      set_color( i, 127, 127, 255 );
    }
 
    // Display an initial message on all rows
    for ( int i = 0; i < LCD_ROWS; ++i )
    {
-      scroll_line( VersionString, i );
+      scroll_line( GreetingString[i], i );
+      for ( int j = 0 ; j < POT_COUNT; ++j )
+         set_color( j, 63, 63, 127 );
    }
+   delay(500);
+   for ( int i = 0 ; i < POT_COUNT; ++i )
+      set_color( i, 0, 0, 0 );
+
+   update_display();
 }
 
 
@@ -228,6 +290,7 @@ unsigned long gLastTime = 0;
 void loop()
 {
    unsigned long time = millis();
+   bool do_update = false;
 
    if ( time < gLastTime )
    {
@@ -236,24 +299,30 @@ void loop()
       gLastTime = 0;
    }
 
-   // See if a minute's gone by
-   if ( time - gLastTime > 1000 * 60 )
+   // See if a second's gone by
+   if ( time - gLastTime > 1000 )
    {
       gLastTime = time;
       for ( int i = 0; i < POT_COUNT; ++i )
       {
-         ++gTimeSinceBrew[i];
+         if ( gTimeSinceBrew[i] >= 0 )
+            ++gTimeSinceBrew[i];
       }
-
-      update_display();
+      do_update = true;
    }
 
    // Check for resets
    for ( int i = 0; i < POT_COUNT; ++i )
    {
       if ( digitalRead( gBrewResetPin[i] ) == LOW )
+      {
          gTimeSinceBrew[i] = 0;
+         do_update = true;
+      }
    }
+
+   if ( do_update )
+      update_display();
 
 }
 
