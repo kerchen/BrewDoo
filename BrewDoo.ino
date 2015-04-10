@@ -22,6 +22,9 @@
 
 #include <LiquidCrystal.h>
 
+/// Uncomment this if using common anode RBG LEDs.
+//#define COMMON_ANODE
+
 const char* VersionString = "BrewDoo 1.0";
 
 /// Defines number of timers (pots of coffee) to keep track of.
@@ -32,7 +35,7 @@ const char* VersionString = "BrewDoo 1.0";
 int gTimeSinceBrew[POT_COUNT] = { 0 };
 
 /// Time, in seconds, beyond which a pot is considered old.
-#define BREW_TIME_LIMIT 4*60*60
+#define BREW_TIME_LIMIT 1*60*60
 
 /// Digital inputs (w/pullups) 
 int gBrewResetPin[POT_COUNT] = { 0, 1 };
@@ -53,9 +56,10 @@ RGB gLEDPin[POT_COUNT] = {
 #define LCD_ROWS 2
 #define LCD_COLS 16 
 
-const char* GreetingString[LCD_ROWS] = {
-"Life's too short",
-"for old coffee!"
+#define GREETING_LINES 2
+const char* GreetingString[GREETING_LINES] = {
+   "Life's too short",
+   "for old coffee!"
 };
 
 /// A buffer used for conveniently writing spaces to an entire line.
@@ -112,7 +116,7 @@ void display_lines( bool center )
 }
 
 
-void scroll_line( const char* line, int row )
+void scroll_line( const char* line, int row, int hold_time )
 {
    // TODO: Use library scrolling functionality?
    for ( int i = 0; i < LCD_COLS; ++i )
@@ -123,11 +127,14 @@ void scroll_line( const char* line, int row )
       gLCDDisplay.print(line);
       delay(100);
    }
+   delay(hold_time);
 }
 
 
 
-// led is index into gLEDPin array; color components in the range [0..255]
+// Sets the color of an RGB LED.
+// led: index into gLEDPin array
+// red, green, blue: color components in the range [0..255]
 void set_color(int led, int red, int green, int blue)
 {
 #ifdef COMMON_ANODE
@@ -143,7 +150,7 @@ void set_color(int led, int red, int green, int blue)
 
 
 /// Guaranteed to consume no more than 7 positions in gDisplayText.
-int seconds_to_time_str( int seconds, int row, int start_index, int limit )
+int seconds_to_time_str( int seconds, int row, int start_index, int limit, bool show_seconds )
 {
    if ( start_index >= limit )
       return start_index;
@@ -173,60 +180,58 @@ int seconds_to_time_str( int seconds, int row, int start_index, int limit )
    if ( start_index < limit ) gDisplayText[row][start_index++] = ':';
    if ( start_index < limit ) gDisplayText[row][start_index++] = '0'+minute/10;
    if ( start_index < limit ) gDisplayText[row][start_index++] = '0'+minute%10;
-   if ( start_index < limit ) gDisplayText[row][start_index++] = ':';
-   if ( start_index < limit ) gDisplayText[row][start_index++] = '0'+second/10;
-   if ( start_index < limit ) gDisplayText[row][start_index++] = '0'+second%10;
+   if ( show_seconds )
+   {
+      if ( start_index < limit ) gDisplayText[row][start_index++] = ':';
+      if ( start_index < limit ) gDisplayText[row][start_index++] = '0'+second/10;
+      if ( start_index < limit ) gDisplayText[row][start_index++] = '0'+second%10;
+   }
 
    return start_index;
 }
 
 
 
-#if (POT_COUNT == 2)
 void update_display()
 {
    int i;
 #if (LCD_ROWS == 1)
-#if (LCD_COLS<16)
-#error Display too small for information to be displayed.
-#endif
-   // Need to squeeze everything on one line
+   #if (LCD_COLS<POT_COUNT*7-1)
+      #error Display too small for information to be displayed.
+   #endif
+   // Need to squeeze everything on one line and omit seconds display
    i = 0;
-   gDisplayText[0][i++] = 'A';
-   gDisplayText[0][i++] = ' ';
-   i = seconds_to_time_str( gTimeSinceBrew[0], 0, i, LCD_COLS );
-   gDisplayText[0][i++] = ' ';
-   gDisplayText[0][i++] = 'B';
-   gDisplayText[0][i++] = ' ';
-   i = seconds_to_time_str( gTimeSinceBrew[1], 1, i, LCD_COLS );
+   for ( int p = 0; p < POT_COUNT; ++p )
+   {
+      gDisplayText[0][i++] = 'A'+p;
+      gDisplayText[0][i++] = ' ';
+      i = seconds_to_time_str( gTimeSinceBrew[p], p, i, LCD_COLS, false );
+      if ( p < POT_COUNT - 1 )
+         gDisplayText[0][i++] = ' ';
+   }
    for ( ; i <= LCD_COLS; ++i )
       gDisplayText[0][i] = 0;
-#else
-#if (LCD_COLS<13)
-#error Display too small for information to be displayed.
+#else // More than 1 row available for LCD
+   #if (LCD_COLS<13)
+      #error Display too small for information to be displayed.
+   #endif
+
+   // One pot per row, with seconds
+   for ( int p = 0; p < POT_COUNT && p < LCD_ROWS; ++p )
+   {
+      i = 0;
+      gDisplayText[p][i++] = 'P';
+      gDisplayText[p][i++] = 'o';
+      gDisplayText[p][i++] = 't';
+      gDisplayText[p][i++] = ' ';
+      gDisplayText[p][i++] = 'A'+p;
+      gDisplayText[p][i++] = ' ';
+      i = seconds_to_time_str( gTimeSinceBrew[p], p, i, LCD_COLS, true );
+      for ( ; i <= LCD_COLS; ++i )
+         gDisplayText[p][i] = 0;
+   }
 #endif
-   // One line per pot
-   i = 0;
-   gDisplayText[0][i++] = 'P';
-   gDisplayText[0][i++] = 'o';
-   gDisplayText[0][i++] = 't';
-   gDisplayText[0][i++] = ' ';
-   gDisplayText[0][i++] = 'A';
-   gDisplayText[0][i++] = ' ';
-   i = seconds_to_time_str( gTimeSinceBrew[0], 0, i, LCD_COLS );
-   for ( ; i <= LCD_COLS; ++i )
-      gDisplayText[0][i] = 0;
-   i = 0;
-   gDisplayText[1][i++] = 'P';
-   gDisplayText[1][i++] = 'o';
-   gDisplayText[1][i++] = 't';
-   gDisplayText[1][i++] = ' ';
-   gDisplayText[1][i++] = 'B';
-   gDisplayText[1][i++] = ' ';
-   i = seconds_to_time_str( gTimeSinceBrew[1], 1, i, LCD_COLS );
-   for ( ; i <= LCD_COLS; ++i )
-      gDisplayText[1][i] = 0;
-#endif
+
    display_lines(false);
 
    for ( i = 0; i < POT_COUNT; ++i )
@@ -244,9 +249,8 @@ void update_display()
       }
    }
 }
-#else
-#error Need to implement update_display() for POT_COUNT value
-#endif
+
+
 
 /// One-time setup before entering the main loop.
 void setup() 
@@ -269,12 +273,18 @@ void setup()
       set_color( i, 127, 127, 255 );
    }
 
-   // Display an initial message on all rows
-   for ( int i = 0; i < LCD_ROWS; ++i )
+   // Display an initial greeting message 
+   int rgb = 64;
+   for ( int j = 0 ; j < POT_COUNT; ++j )
+      set_color( j, rgb, rgb, 2*rgb );
+   rgb = rgb / 2;
+   scroll_line( VersionString, 0, 400 );
+   for ( int i = 0; i < GREETING_LINES; ++i )
    {
-      scroll_line( GreetingString[i], i );
       for ( int j = 0 ; j < POT_COUNT; ++j )
-         set_color( j, 63, 63, 127 );
+         set_color( j, rgb, rgb, 2*rgb );
+      rgb = rgb / 2;
+      scroll_line( GreetingString[i], 0, 400 );
    }
    delay(500);
    for ( int i = 0 ; i < POT_COUNT; ++i )
