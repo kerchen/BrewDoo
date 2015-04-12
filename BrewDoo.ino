@@ -73,8 +73,8 @@ char gDisplayText[LCD_ROWS][LCD_COLS+1] = {0};
 /// Pins for Hitachi LCD; any of the Arduino digital pins should work
 // interchangeably for any of these LCD connections.  I chose these to
 // simplify the PCB layout.
-int gLCD_RS_Pin = 12;
-int gLCD_E_Pin = 13;
+int gLCD_RS_Pin = 13;
+int gLCD_E_Pin = 12;
 int gLCD_D4_Pin = 8;
 int gLCD_D5_Pin = 7;
 int gLCD_D6_Pin = 4;
