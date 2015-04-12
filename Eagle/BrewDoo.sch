@@ -8075,6 +8075,10 @@ Es handelt sich hierbei um AK500 in horizontaler Ausführung.&lt;p&gt;
 <part name="U$1" library="jumper-wires-pk" deviceset="WIRE-0.3" device=""/>
 <part name="U$2" library="jumper-wires-pk" deviceset="WIRE-0.3" device=""/>
 <part name="U$3" library="jumper-wires-pk" deviceset="WIRE-0.6" device=""/>
+<part name="H5" library="holes" deviceset="MOUNT-HOLE" device="3.0"/>
+<part name="H6" library="holes" deviceset="MOUNT-HOLE" device="3.0"/>
+<part name="H7" library="holes" deviceset="MOUNT-HOLE" device="3.0"/>
+<part name="H8" library="holes" deviceset="MOUNT-HOLE" device="3.0"/>
 </parts>
 <sheets>
 <sheet>
@@ -8109,6 +8113,10 @@ Es handelt sich hierbei um AK500 in horizontaler Ausführung.&lt;p&gt;
 <instance part="U$1" gate="G$1" x="93.98" y="114.3"/>
 <instance part="U$2" gate="G$1" x="-7.62" y="17.78"/>
 <instance part="U$3" gate="G$1" x="25.4" y="106.68" rot="R90"/>
+<instance part="H5" gate="G$1" x="142.24" y="76.2"/>
+<instance part="H6" gate="G$1" x="162.56" y="76.2"/>
+<instance part="H7" gate="G$1" x="142.24" y="68.58"/>
+<instance part="H8" gate="G$1" x="162.56" y="68.58"/>
 </instances>
 <busses>
 </busses>
