@@ -1,0 +1,84 @@
+(Hole layout for TinSharp LCD module)
+T1M06
+(Absolute coordinates)
+G90
+F8.0000
+S8000.0000
+(flood coolant)
+M08
+(turn on spindle, clockwise)
+M03
+
+(fast/safe move z)
+#1 = 0.2
+(max cut depth per pass)
+#2 = -0.02
+(x offset)
+#3 = 0.0
+(y offset)
+#4 = 0.0
+(tool radius)
+#5 = 0.0625
+(max cut depth total)
+#6 = -0.16
+
+G00 Z #1
+( lower left button hole)
+(G83 G98 X [-1.8 + #3] Y [-0.2 + #4] Z #6 Q [0.0-#2] R 0.01)
+
+(G00 Z #1)
+(M0)
+( upper left button hole )
+(G83 G98 X [-1.8 + #3] Y [0.35 + #4] Z #6 Q [0.0-#2] R 0.01)
+
+(G00 Z #1)
+(M0)
+( upper right LED hole )
+(G83 G98 X [1.825 + #3] Y [0.35 + #4] Z #6 Q [0.0-#2] R 0.01)
+
+(G00 Z #1)
+(M0)
+( lower right LED hole )
+(G83 G98 X [1.825 + #3] Y [-0.2 + #4] Z #6 Q [0.0-#2] R 0.01)
+
+(G00 Z #1)
+(M0)
+
+(lower left corner of bezel)
+#7 = [-1.255+#5+#3]
+#8 = [-0.425+#5+#4]
+(upper right corner of bezel)
+#9 = [1.550-#5+#3]
+#10 = [0.670-#5+#4]
+
+(current cut depth)
+#11 = #2
+
+(cut bezel opening from lower left, clockwise)
+G00 Z #1
+G00 X #7 Y #8
+G01 Z 0.0
+
+O102 while [ #11 gt #6 ]
+
+G01 X #9 Z #11 
+G01 Y #10
+G01 X #7
+G01 Y #8
+
+(pause between depth passes)
+G00 Z 0.2
+M0
+G01 Z #11
+
+#11 = [#11 + #2]
+
+O102 endwhile
+
+G00 Z #1
+
+
+
+M05
+M09
+M30
