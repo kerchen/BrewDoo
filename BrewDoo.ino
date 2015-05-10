@@ -25,7 +25,7 @@
 /// Uncomment this if using common anode RBG LEDs.
 //#define COMMON_ANODE
 
-const char* VersionString = "BrewDoo 1.0";
+const char* VersionString = "BrewDoo 1.1";
 
 /// Defines number of timers (pots of coffee) to keep track of.
 /// For an UNO, 2 is the maximum number possible.
@@ -34,10 +34,15 @@ const char* VersionString = "BrewDoo 1.0";
 /// Keeps track of number of seconds since each pot was brewed.
 long gTimeSinceBrew[POT_COUNT] = { -1 };
 
-/// Time, in seconds, beyond which a pot is considered old.
-#define BREW_TIME_LIMIT (1*60*60)
-/// Time, in seconds, when the brew time should be reset to 'unknown' 
-#define RESET_TIME_LIMIT (BREW_TIME_LIMIT*4)
+/// Time since brewed, in seconds, during which a pot is considered very fresh. 
+// A pot's indicator LED will be pure green during this time.
+#define FRESH_TIME_LIMIT (1*15*60)
+/// Time since brewed, in seconds, beyond which a pot is considered old.
+// A pot's indicator LED will be pure red after this time.
+#define OLD_TIME_LIMIT (3*60*60)
+/// Time since brewed, in seconds, when the brew time should be reset to 'unknown' 
+// A pot's indicator LED will be turned off after this time.
+#define RESET_TIME_LIMIT (4*60*60)
 
 /// Digital inputs (w/pullups) 
 int gBrewResetPin[POT_COUNT] = { 0, 1 };
@@ -229,20 +234,25 @@ void update_display()
 
    display_lines(false);
 
+   // Note that green values are divided by two as a crude
+   // way to compensate for the eye's greater sensitivity to
+   // green. Otherwise, green is kind of overpowering.
    for ( int p = 0; p < POT_COUNT; ++p )
    {
       if ( gTimeSinceBrew[p] < 0 )
          set_color( p, 0, 0, 0 );
-      else if ( gTimeSinceBrew[p] > BREW_TIME_LIMIT )
+      else if ( gTimeSinceBrew[p] < FRESH_TIME_LIMIT )
+         set_color( p, 0, 127, 0 );
+      else if ( gTimeSinceBrew[p] > OLD_TIME_LIMIT )
          set_color( p, 255, 0, 0 );
       else
       {
-         unsigned long val = (255 * (BREW_TIME_LIMIT - gTimeSinceBrew[p]));
+         // Interpolate between green/fresh and red/old
+         unsigned long val = (255 * (gTimeSinceBrew[p]-FRESH_TIME_LIMIT)/(OLD_TIME_LIMIT-FRESH_TIME_LIMIT));
          
-         val /= BREW_TIME_LIMIT;
          if ( val > 255 )
             val = 255;
-         set_color( p, 255-val, val/2, 0 );
+         set_color( p, val, (255-val)/2, 0 );
       }
    }
 }
